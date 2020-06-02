@@ -1,0 +1,38 @@
+clang
+
+%c -std=c11
+%cpp -std=c++11
+
+-I/dropbox/kamushadenes/Arduino/commanddeck_leonardo/include
+-I/dropbox/kamushadenes/Arduino/commanddeck_leonardo/src
+-I/home/kamushadenes/.platformio/packages/framework-arduino-avr/cores/arduino
+-I/home/kamushadenes/.platformio/packages/framework-arduino-avr/variants/leonardo
+-I/home/kamushadenes/.platformio/lib/ArduinoJson_ID64/src
+-I/home/kamushadenes/.platformio/lib/Heltec_ESP8266/src
+-I/home/kamushadenes/.platformio/lib/Keypad_ID165/src
+-I/home/kamushadenes/.platformio/lib/MFRC522_ID63/src
+-I/home/kamushadenes/.platformio/lib/TM1637_ID258
+-I/home/kamushadenes/.platformio/lib/TaskScheduler_ID721/src
+-I/home/kamushadenes/.platformio/lib/WiFi_Kit_series
+-I/home/kamushadenes/.platformio/lib/ai_ap3216_ambient-light-and-proximity-sensor-library/src
+-I/home/kamushadenes/.platformio/lib/painlessMesh_ID1269/src
+-I/home/kamushadenes/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src
+-I/home/kamushadenes/.platformio/packages/framework-arduino-avr/libraries/HID/src
+-I/home/kamushadenes/.platformio/packages/framework-arduino-avr/libraries/SPI/src
+-I/home/kamushadenes/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src
+-I/home/kamushadenes/.platformio/packages/framework-arduino-avr/libraries/Wire/src
+-I/home/kamushadenes/.platformio/packages/toolchain-atmelavr/lib/gcc/avr/5.4.0/include
+-I/home/kamushadenes/.platformio/packages/toolchain-atmelavr/lib/gcc/avr/5.4.0/include-fixed
+-I/home/kamushadenes/.platformio/packages/toolchain-atmelavr/avr/include
+-I/home/kamushadenes/.platformio/packages/tool-unity
+
+-DPLATFORMIO=40303
+-DARDUINO_AVR_LEONARDO
+-DF_CPU=16000000L
+-DARDUINO_ARCH_AVR
+-DARDUINO=10808
+-DUSB_VID=0x2341
+-DUSB_PID=0x8036
+-DUSB_PRODUCT=&quot;Arduino Leonardo&quot;
+-DUSB_MANUFACTURER=&quot;Arduino&quot;
+-D__AVR_ATmega32U4__
