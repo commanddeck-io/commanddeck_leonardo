@@ -1,12 +1,50 @@
 #include <Arduino.h>
-#include <SoftwareSerial.h>
+#include <MemoryFree.h>
 #include <Keypad.h>
 #include "Keyboard.h"
-
+//#include <cstring>
 //#include <cstdlib>
 
 #define BUILTIN_LED 13
 
+const unsigned int cmdSize = 64;
+const unsigned int numChars = cmdSize+10;
+
+char receivedChars[numChars];   // an array to store the received data
+
+char currentCmd[cmdSize];
+
+boolean newData = false;
+
+void recvWithStartEndMarkers() {
+  static boolean recvInProgress = false;
+  static byte ndx = 0;
+  char startMarker = '<';
+  char endMarker = '>';
+  char rc;
+
+  while (Serial1.available() > 0 && newData == false) {
+    rc = Serial1.read();
+
+    if (recvInProgress == true) {
+      if (rc != endMarker) {
+        receivedChars[ndx] = rc;
+        ndx++;
+        if (ndx >= numChars) {
+          ndx = numChars - 1;
+        }
+      }
+      else {
+        receivedChars[ndx] = '\0'; // terminate the string
+        recvInProgress = false;
+        ndx = 0;
+        newData = true;
+      }
+    } else if (rc == startMarker) {
+      recvInProgress = true;
+    }
+  }
+}
 
 /*
   Matrix keypad mapping
@@ -14,11 +52,11 @@
 const byte n_rows = 4;
 const byte n_cols = 4;
 
-char matrix[n_rows][n_cols] = {
-                               {'1','2','3','A'},
-                               {'4','5','6','B'},
-                               {'7','8','9','C'},
-                               {'*','0','#','D'}
+const char matrix[n_rows][n_cols] = {
+                                     {'1','2','3','A'},
+                                     {'4','5','6','B'},
+                                     {'7','8','9','C'},
+                                     {'*','0','#','D'}
 };
 
 // Define keypad pins
@@ -30,8 +68,8 @@ Keypad keypad = Keypad( makeKeymap(matrix), rowPins, colPins, n_rows, n_cols);
 /*
   Initialize commands
 */
-String cmd1, cmd2, cmd3, cmd4, cmd5, cmd6, cmd7, cmd8, cmd9, cmd0;
-String cmdStar, cmdHash, cmdA, cmdB, cmdC, cmdD;
+char cmd1[cmdSize], cmd2[cmdSize], cmd3[cmdSize], cmd4[cmdSize], cmd5[cmdSize], cmd6[cmdSize], cmd7[cmdSize], cmd8[cmdSize], cmd9[cmdSize], cmd0[cmdSize];
+char cmdStar[cmdSize], cmdHash[cmdSize], cmdA[cmdSize], cmdB[cmdSize], cmdC[cmdSize], cmdD[cmdSize];
 
 /*
   Keyboard utils
@@ -69,98 +107,140 @@ String getValue(String data, char separator, int index)
   return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
 }
 
-void parseCommand(String cmd) {
-  char *str = cmd.c_str();
+void parseCommand(char cmdOrig[cmdSize]) {
+  Serial.print("Parsing command ");
+  Serial.println(cmdOrig);
+  snprintf(currentCmd, cmdSize, "%s", cmdOrig);
+
+  Serial.print("Parsing command current ");
+  Serial.println(currentCmd);
+
   char *pch;
   int defaultDelay = 0;
-  pch = strtok (str," ");
-  while (pch != NULL)
-    {
-      String str = pch;
+  pch = strtok (currentCmd, "|");
+  while (pch != NULL) {
+    bool hold = false;
+    bool release = false;
 
-      bool hold = false;
-      bool release = false;
+    char cmd[cmdSize];
 
-      if (str.startsWith("+") && str.length() > 1) {
+    if (pch[0] == '#') {
+      if (pch[1] == '+' && strlen(pch) > 2) {
         hold = true;
-        str = str.substring(1);
-      } else if (str.startsWith("-") && str.length() > 1) {
+        snprintf(cmd, cmdSize, "%s", pch+2);
+      } else if (pch[1] == '-' && strlen(pch) > 2) {
         release = true;
-        str = str.substring(1);
+        snprintf(cmd, cmdSize, "%s", pch+2);
+      } else {
+        snprintf(cmd, cmdSize, "%s", pch+1);
       }
 
-      if (str == "SPC") { Keyboard.print(" ");
-      } else if (str == "L_CTRL") { pressKey(KEY_LEFT_CTRL, hold, release);
-      } else if (str == "L_ALT") { pressKey(KEY_LEFT_ALT, hold, release);
-      } else if (str == "L_SHIFT") { pressKey(KEY_LEFT_SHIFT, hold, release);
-      } else if (str == "R_CTRL") { pressKey(KEY_RIGHT_CTRL, hold, release);
-      } else if (str == "R_ALT") { pressKey(KEY_RIGHT_ALT, hold, release);
-      } else if (str == "R_SHIFT") { pressKey(KEY_RIGHT_SHIFT, hold, release);
+      if (strcmp(cmd, "SPC") == 0) { Keyboard.print(' ');
+      } else if (strcmp(cmd, "HASH") == 0) { Keyboard.print('#');
+      } else if (strcmp(cmd, "PIPE") == 0) { Keyboard.print('|');
+      } else if (strcmp(cmd, "EQ") == 0) { Keyboard.print('=');
+      } else if (strcmp(cmd, "PCT") == 0) { Keyboard.print('%');
 
-      } else if (str == "L_WIN") { pressKey(KEY_LEFT_GUI, hold, release);
-      } else if (str == "R_WIN") { pressKey(KEY_RIGHT_GUI, hold, release);
+      } else if (strcmp(cmd, "S_QUOTE") == 0) { Keyboard.print('\'');
+      } else if (strcmp(cmd, "D_QUOTE") == 0) { Keyboard.print('"');
 
-      } else if (str == "L_ARROW") { pressKey(KEY_LEFT_ARROW, hold, release);
-      } else if (str == "R_ARROW") { pressKey(KEY_RIGHT_ARROW, hold, release);
-      } else if (str == "U_ARROW") { pressKey(KEY_UP_ARROW, hold, release);
-      } else if (str == "D_ARROW") { pressKey(KEY_DOWN_ARROW, hold, release);
+      } else if (strcmp(cmd, "LT") == 0) { Keyboard.print('<');
+      } else if (strcmp(cmd, "GT") == 0) { Keyboard.print('>');
 
-      } else if (str == "DEL") { pressKey(KEY_DELETE, hold, release);
-      } else if (str == "ENTER") { pressKey(KEY_RETURN, hold, release);
-      } else if (str == "RET") { pressKey(KEY_RETURN, hold, release);
-      } else if (str == "ESC") { pressKey(KEY_ESC, hold, release);
-      } else if (str == "BACKSPC") { pressKey(KEY_BACKSPACE, hold, release);
-      } else if (str == "BACK") { pressKey(KEY_BACKSPACE, hold, release);
-      } else if (str == "TAB") { pressKey(KEY_TAB, hold, release);
-      } else if (str == "INS") { pressKey(KEY_INSERT, hold, release);
-      } else if (str == "PG_UP") { pressKey(KEY_PAGE_UP, hold, release);
-      } else if (str == "PG_DOWN") { pressKey(KEY_PAGE_DOWN, hold, release);
-      } else if (str == "HOME") { pressKey(KEY_HOME, hold, release);
-      } else if (str == "END") { pressKey(KEY_END, hold, release);
-      } else if (str == "CAPS") { pressKey(KEY_CAPS_LOCK, hold, release);
-      } else if (str == "CAPSLOCK") { pressKey(KEY_CAPS_LOCK, hold, release);
+      } else if (strcmp(cmd, "L_CTRL") == 0) { pressKey(KEY_LEFT_CTRL, hold, release);
+      } else if (strcmp(cmd, "R_CTRL") == 0) { pressKey(KEY_RIGHT_CTRL, hold, release);
+      } else if (strcmp(cmd, "L_ALT") == 0) { pressKey(KEY_LEFT_ALT, hold, release);
+      } else if (strcmp(cmd, "R_ALT") == 0) { pressKey(KEY_RIGHT_ALT, hold, release);
+      } else if (strcmp(cmd, "L_SHIFT") == 0) { pressKey(KEY_LEFT_SHIFT, hold, release);
+      } else if (strcmp(cmd, "R_SHIFT") == 0) { pressKey(KEY_RIGHT_SHIFT, hold, release);
+      } else if (strcmp(cmd, "L_WIN") == 0) { pressKey(KEY_LEFT_GUI, hold, release);
+      } else if (strcmp(cmd, "R_WIN") == 0) { pressKey(KEY_RIGHT_GUI, hold, release);
 
-      } else if (str == "F1") { pressKey(KEY_F1, hold, release);
-      } else if (str == "F2") { pressKey(KEY_F2, hold, release);
-      } else if (str == "F3") { pressKey(KEY_F3, hold, release);
-      } else if (str == "F4") { pressKey(KEY_F4, hold, release);
-      } else if (str == "F5") { pressKey(KEY_F5, hold, release);
-      } else if (str == "F6") { pressKey(KEY_F6, hold, release);
-      } else if (str == "F7") { pressKey(KEY_F7, hold, release);
-      } else if (str == "F8") { pressKey(KEY_F8, hold, release);
-      } else if (str == "F9") { pressKey(KEY_F9, hold, release);
-      } else if (str == "F10") { pressKey(KEY_F10, hold, release);
-      } else if (str == "F11") { pressKey(KEY_F11, hold, release);
-      } else if (str == "F12") { pressKey(KEY_F12, hold, release);
+      } else if (strcmp(cmd, "L_ARROW") == 0) { pressKey(KEY_LEFT_ARROW, hold, release);
+      } else if (strcmp(cmd, "R_ARROW") == 0) { pressKey(KEY_RIGHT_ARROW, hold, release);
+      } else if (strcmp(cmd, "U_ARROW") == 0) { pressKey(KEY_UP_ARROW, hold, release);
+      } else if (strcmp(cmd, "D_ARROW") == 0) { pressKey(KEY_DOWN_ARROW, hold, release);
 
-      } else if (str == "BRK") { Keyboard.releaseAll();
-      } else if (str == "REL") { Keyboard.releaseAll();
+      } else if (strcmp(cmd, "DEL") == 0) { pressKey(KEY_DELETE, hold, release);
+      } else if (strcmp(cmd, "RET") == 0) { pressKey(KEY_RETURN, hold, release);
+      } else if (strcmp(cmd, "ESC") == 0) { pressKey(KEY_ESC, hold, release);
+      } else if (strcmp(cmd, "BACK") == 0) { pressKey(KEY_BACKSPACE, hold, release);
+      } else if (strcmp(cmd, "TAB") == 0) { pressKey(KEY_TAB, hold, release);
+      } else if (strcmp(cmd, "INS") == 0) { pressKey(KEY_INSERT, hold, release);
 
-      } else if (str.startsWith("T_")) {
-        String tmp = str.substring(2);
-        Serial.println(tmp);
-        int dl = tmp.toInt();
+      } else if (strcmp(cmd, "PG_UP") == 0) { pressKey(KEY_PAGE_UP, hold, release);
+      } else if (strcmp(cmd, "PG_DOWN") == 0) { pressKey(KEY_PAGE_DOWN, hold, release);
+
+      } else if (strcmp(cmd, "HOME") == 0) { pressKey(KEY_HOME, hold, release);
+      } else if (strcmp(cmd, "END") == 0) { pressKey(KEY_END, hold, release);
+      } else if (strcmp(cmd, "CAPS") == 0) { pressKey(KEY_CAPS_LOCK, hold, release);
+
+      } else if (strcmp(cmd, "F1") == 0) { pressKey(KEY_F1, hold, release);
+      } else if (strcmp(cmd, "F2") == 0) { pressKey(KEY_F2, hold, release);
+      } else if (strcmp(cmd, "F3") == 0) { pressKey(KEY_F3, hold, release);
+      } else if (strcmp(cmd, "F4") == 0) { pressKey(KEY_F4, hold, release);
+      } else if (strcmp(cmd, "F5") == 0) { pressKey(KEY_F5, hold, release);
+      } else if (strcmp(cmd, "F6") == 0) { pressKey(KEY_F6, hold, release);
+      } else if (strcmp(cmd, "F7") == 0) { pressKey(KEY_F7, hold, release);
+      } else if (strcmp(cmd, "F8") == 0) { pressKey(KEY_F8, hold, release);
+      } else if (strcmp(cmd, "F9") == 0) { pressKey(KEY_F9, hold, release);
+      } else if (strcmp(cmd, "F10") == 0) { pressKey(KEY_F10, hold, release);
+      } else if (strcmp(cmd, "F11") == 0) { pressKey(KEY_F11, hold, release);
+      } else if (strcmp(cmd, "F12") == 0) { pressKey(KEY_F12, hold, release);
+
+      } else if (strcmp(cmd, "CMD_1") == 0) { parseCommand(cmd1);
+      } else if (strcmp(cmd, "CMD_2") == 0) { parseCommand(cmd2);
+      } else if (strcmp(cmd, "CMD_3") == 0) { parseCommand(cmd3);
+      } else if (strcmp(cmd, "CMD_4") == 0) { parseCommand(cmd4);
+      } else if (strcmp(cmd, "CMD_5") == 0) { parseCommand(cmd5);
+      } else if (strcmp(cmd, "CMD_6") == 0) { parseCommand(cmd6);
+      } else if (strcmp(cmd, "CMD_7") == 0) { parseCommand(cmd7);
+      } else if (strcmp(cmd, "CMD_8") == 0) { parseCommand(cmd8);
+      } else if (strcmp(cmd, "CMD_9") == 0) { parseCommand(cmd9);
+      } else if (strcmp(cmd, "CMD_0") == 0) { parseCommand(cmd0);
+      } else if (strcmp(cmd, "CMD_A") == 0) { parseCommand(cmdA);
+      } else if (strcmp(cmd, "CMD_B") == 0) { parseCommand(cmdB);
+      } else if (strcmp(cmd, "CMD_C") == 0) { parseCommand(cmdC);
+      } else if (strcmp(cmd, "CMD_D") == 0) { parseCommand(cmdD);
+      } else if (strcmp(cmd, "CMD_STAR") == 0) { parseCommand(cmdStar);
+      } else if (strcmp(cmd, "CMD_HASH") == 0) { parseCommand(cmdHash);
+
+      } else if (strcmp(cmd, "REL") == 0) { Keyboard.releaseAll();
+
+      } else if (cmd[0] == 'T' && cmd[1] == '_') {
+        char nCmd[cmdSize];
+        strncpy(nCmd, cmd+2, sizeof(nCmd));
+
+        int dl = atoi(nCmd);
         if (dl > 0) {
           delay(dl);
         } else {
-          Keyboard.print(pch);
+          Keyboard.print(cmd);
         }
-      } else if (str.startsWith("DT_")) {
-        String tmp = str.substring(3);
-        Serial.println(tmp);
-        int dl = tmp.toInt();
+      } else if (cmd[0] == 'D' && cmd[1] == 'T' && cmd[2] == '_') {
+        char nCmd[cmdSize];
+        strncpy(nCmd, cmd+3, sizeof(nCmd));
+
+        int dl = atoi(nCmd);
         if (dl > 0) {
           defaultDelay = dl;
         } else {
-          Keyboard.print(pch);
+          Keyboard.print(cmd);
         }
+      } else {
+        Keyboard.print(cmd);
+      }
 
-      } else { Keyboard.print(pch); };
-
-      pch = strtok(NULL, " ");
-
-      delay(defaultDelay);
+    } else {
+      Keyboard.print(pch);
     }
+
+    pch = strtok(NULL, "|");
+
+    delay(defaultDelay);
+  }
+
+  currentCmd[0] = '\0';
 
   Keyboard.releaseAll();
 }
@@ -170,11 +250,11 @@ void parseCommand(String cmd) {
   Key Handling
 */
 void handleKeyPress(char key) {
-  String str = "KEY key=";
-  str.concat(key);
-  str.concat("|");
-  Serial1.println(str);
-  str.remove(0);
+  Serial1.print("KEY%");
+  Serial1.print(key);
+  Serial1.println("|");
+
+
 
   switch (key){
   case '1': parseCommand(cmd1); break;
@@ -199,7 +279,6 @@ void handleKeyPress(char key) {
 void handleKeyHold(char key) {
   switch (key){
   case '*':
-    Serial1.println("LOVE|");
     break;
   }
 }
@@ -215,6 +294,10 @@ void keypadEvent(KeypadEvent key){
   }
 }
 
+unsigned long startMillis;
+unsigned long currentMillis;
+const unsigned long period = 10000;
+
 /*
   Loop
 */
@@ -223,82 +306,95 @@ void loop()
   char pressedKey = keypad.getKey();
 
   if (pressedKey) {
-    Serial.print("Key pressed: ");
+    Serial.print("P:");
     Serial.println(pressedKey);
   }
 
-  while (Serial1.available()) {
-    if (Serial1.available() > 0) {
-      digitalWrite(BUILTIN_LED, HIGH);
-      String str = Serial1.readStringUntil('|');
-      str.trim();
+  digitalWrite(BUILTIN_LED, HIGH);
 
-      if (str.startsWith("CMD")) { // A command is being binded to key
-        // Example: CMD row=0 col=0 cmd=SPC m e b|
-        String rawRow = getValue(str, '=', 1);
-        String rawCol = getValue(str, '=', 2);
-        String rawCmd = getValue(str, '=', 3);
+  if (newData) {
+    Serial.print("Received: ");
+    Serial.println(receivedChars);
 
-        int row = rawRow.toInt();
-        int col = rawCol.toInt();
+    if (receivedChars[0] == 'C' && receivedChars[1] == 'M' && receivedChars[2] == 'D') {
+      // Example: CMD%0%0%SPC m e b|
 
-        // Ugly, I know
-        switch (row) {
-        case 0:
-          switch (col) {
-          case 0: cmd1 = rawCmd; break;
-          case 1: cmd2 = rawCmd; break;
-          case 2: cmd3 = rawCmd; break;
-          case 3: cmdA = rawCmd; break;
-          }
-          break;
-        case 1:
-          switch (col) {
-          case 0: cmd4 = rawCmd; break;
-          case 1: cmd5 = rawCmd; break;
-          case 2: cmd6 = rawCmd; break;
-          case 3: cmdB = rawCmd; break;
-          }
-          break;
-        case 2:
-          switch (col) {
-          case 0: cmd7 = rawCmd; break;
-          case 1: cmd8 = rawCmd; break;
-          case 2: cmd9 = rawCmd; break;
-          case 3: cmdC = rawCmd; break;
-          }
-          break;
-        case 3:
-          switch (col) {
-          case 0: cmdStar = rawCmd; break;
-          case 1: cmd0 = rawCmd; break;
-          case 2: cmdHash = rawCmd; break;
-          case 3: cmdD = rawCmd; break;
-          }
-          break;
+      char rawRow = receivedChars[4];
+      char rawCol = receivedChars[6];
+
+      char rawCmd[cmdSize];
+
+      snprintf(rawCmd, cmdSize, "%s", receivedChars+8);
+
+      int row = rawRow - '0';
+      int col = rawCol - '0';
+
+      // Ugly, I know
+      switch (row) {
+      case 0:
+        switch (col) {
+        case 0: snprintf(cmd1, cmdSize, "%s", rawCmd); break;
+        case 1: snprintf(cmd2, cmdSize, "%s", rawCmd); break;
+        case 2: snprintf(cmd3, cmdSize, "%s", rawCmd); break;
+        case 3: snprintf(cmdA, cmdSize, "%s", rawCmd); break;
         }
-
-        Serial.println();
-        Serial.print("Got new command: row=");
-        Serial.print(row);
-        Serial.print(" col=");
-        Serial.print(col);
-        Serial.print(" cmd=");
-        Serial.println(rawCmd);
-      } else if (str.startsWith("KEY")) { // A key has been pressed remotely on Blynk
-        // Example: KEY key=1|
-        String key = getValue(str, '=', 1);
-
-        Serial.println();
-        Serial.print("Key pressed remotely: ");
-        Serial.println(key);
-
-        handleKeyPress(key.charAt(0));
+        break;
+      case 1:
+        switch (col) {
+        case 0: snprintf(cmd4, cmdSize, "%s", rawCmd); break;
+        case 1: snprintf(cmd5, cmdSize, "%s", rawCmd); break;
+        case 2: snprintf(cmd6, cmdSize, "%s", rawCmd); break;
+        case 3: snprintf(cmdB, cmdSize, "%s", rawCmd); break;
+        }
+        break;
+      case 2:
+        switch (col) {
+        case 0: snprintf(cmd7, cmdSize, "%s", rawCmd); break;
+        case 1: snprintf(cmd8, cmdSize, "%s", rawCmd); break;
+        case 2: snprintf(cmd9, cmdSize, "%s", rawCmd); break;
+        case 3: snprintf(cmdC, cmdSize, "%s", rawCmd); break;
+        }
+        break;
+      case 3:
+        switch (col) {
+        case 0: snprintf(cmdStar, cmdSize, "%s", rawCmd); break;
+        case 1: snprintf(cmd0,    cmdSize, "%s", rawCmd); break;
+        case 2: snprintf(cmdHash, cmdSize, "%s", rawCmd); break;
+        case 3: snprintf(cmdD,    cmdSize, "%s", rawCmd); break;
+        }
+        break;
       }
 
-      Serial1.println("ACK|");
-      digitalWrite(BUILTIN_LED, LOW);
+      Serial.println();
+      Serial.print("Understood CMD%");
+      Serial.print(row);
+      Serial.print("%");
+      Serial.print(col);
+      Serial.print("%");
+      Serial.println(rawCmd);
+    } else if (receivedChars[0] == 'K' && receivedChars[1] == 'E' && receivedChars[2] == 'Y') { // A key has been pressed remotely on Blynk
+      // Example: KEY%1|
+      char key = receivedChars[4];
+
+      Serial.println();
+      Serial.print("RP:");
+      Serial.println(key);
+
+      handleKeyPress(key);
     }
+
+    newData = false;
+    receivedChars[0] = '\0';
+  } else {
+    recvWithStartEndMarkers();
+  }
+  digitalWrite(BUILTIN_LED, LOW);
+
+  currentMillis = millis();
+  if (currentMillis - startMillis >= period)  {
+    Serial.print("FM:");
+    Serial.println(freeMemory());
+    startMillis = currentMillis;
   }
 }
 
@@ -318,5 +414,12 @@ void setup(){
 
   while (!Serial1) {};
   delay(2000);
-  Serial1.println("BOOTUP|");
+
+  // Empty buffer
+  while (Serial.available() > 0) {
+    Serial.read();
+  }
+  Serial1.println("BOOT|");
+
+  startMillis = millis(); 
 }
